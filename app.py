@@ -10,10 +10,9 @@ from dotenv import load_dotenv
 # CONFIGURAÇÃO INICIAL
 # ==============================
 st.set_page_config(page_title="MobiAir 🌍", page_icon="💨", layout="centered")
-st.title("🌆 MobiAir – Qualidade do Ar e Mobilidade Urbana")
+st.title("🌆 MobiAir – Qualidade do Ar e Rotas de Caminhada")
 st.markdown("""
-Aplicação para visualizar a **qualidade do ar** em tempo real 🌎  
-e gerar **rotas de caminhada saudáveis** 🚶‍♂️🚴‍♀️
+Aplicativo para visualizar a **qualidade do ar** e gerar **rotas de caminhada saudáveis** 🚶‍♂️🌿
 """)
 
 # ==============================
@@ -45,17 +44,6 @@ def get_air_quality(lat, lon):
         return r.json()
     return None
 
-def obter_rota(origem, destino):
-    url = "https://api.openrouteservice.org/v2/directions/foot-walking"
-    headers = {"Authorization": ORS_API_KEY, "Content-Type": "application/json"}
-    body = {"coordinates": [[origem[1], origem[0]], [destino[1], destino[0]]]}  # [lon, lat]
-    r = requests.post(url, json=body, headers=headers)
-    if r.status_code == 200:
-        return r.json()
-    else:
-        st.error(f"Erro ao gerar rota: {r.status_code}")
-        return None
-
 def interpretar_aqi(aqi):
     descricao = {
         1: ("🟢 Boa", "#4CAF50"),
@@ -65,6 +53,24 @@ def interpretar_aqi(aqi):
         5: ("🟣 Muito Ruim", "#9C27B0")
     }
     return descricao.get(aqi, ("Desconhecido", "#9E9E9E"))
+
+def obter_rota(origem, destino):
+    url = "https://api.openrouteservice.org/v2/directions/foot-walking"
+    headers = {"Authorization": ORS_API_KEY, "Content-Type": "application/json"}
+    body = {"coordinates": [[origem[1], origem[0]], [destino[1], destino[0]]]}  # [lon, lat]
+    r = requests.post(url, json=body, headers=headers)
+
+    try:
+        data = r.json()
+    except ValueError:
+        st.error("Erro: resposta inválida da API ORS.")
+        return None
+
+    if r.status_code == 200 and "features" in data:
+        return data
+    else:
+        st.error(f"Erro ao gerar rota ORS: {data.get('error', r.status_code)}")
+        return None
 
 # ==============================
 # QUALIDADE DO AR
@@ -76,7 +82,7 @@ if cidade:
     lat, lon, nome = get_coordinates(cidade)
     if lat and lon:
         aq_data = get_air_quality(lat, lon)
-        if aq_data and "list" in aq_data:
+        if aq_data and "list" in aq_data and aq_data["list"]:
             aqi = aq_data["list"][0]["main"]["aqi"]
             componentes = aq_data["list"][0]["components"]
 
@@ -114,7 +120,7 @@ if st.button("Gerar rota"):
         st.error("Não foi possível localizar origem ou destino.")
     else:
         rota = obter_rota(origem_coords, destino_coords)
-        if rota:
+        if rota and "features" in rota:
             geometry = rota["features"][0]["geometry"]["coordinates"]
             pontos = [[lat, lon] for lon, lat in geometry]
 
